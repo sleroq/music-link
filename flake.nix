@@ -27,7 +27,7 @@
               defaultTheme ? "base",
               themeColor ? null,
               themeColorDark ? null,
-              npmDepsHash ? "sha256-lZykwnRQluN58byeMWNqOG0X6s1exLIYUnDaI0QAZfs=",
+              npmDepsHash ? "sha256-WtZtDtLk5UCQVv7WcUBGMKfKtnMDTD/TrZYP9hnmVa0=",
               version ? "0.0.0",
               pname ?
                 if themes == [ "base" ] && defaultTheme == "base" then
