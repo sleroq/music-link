@@ -2,6 +2,7 @@ package sharepage
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,6 +25,20 @@ func (loader) Load(context.Context, string) (navidrome.Share, error) {
 	}, nil
 }
 
+type generatedMP3 struct {
+	data string
+}
+
+func (generator generatedMP3) Generate(_ context.Context, _ navidrome.Track) (io.ReadSeekCloser, error) {
+	return readSeekCloser{Reader: strings.NewReader(generator.data)}, nil
+}
+
+type readSeekCloser struct {
+	*strings.Reader
+}
+
+func (readSeekCloser) Close() error { return nil }
+
 func TestServerEmbedsMetadataAndShareData(t *testing.T) {
 	t.Parallel()
 	directory := t.TempDir()
@@ -31,7 +46,7 @@ func TestServerEmbedsMetadataAndShareData(t *testing.T) {
 	if err := os.WriteFile(shellPath, []byte("<html><head><title>Shell</title></head><body></body></html>"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewServer(loader{}, "https://music.example.com", shellPath, "", "", "")
+	server, err := NewServer(loader{}, generatedMP3{}, "https://music.example.com", shellPath, "", "", "")
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)
 	}
@@ -41,7 +56,7 @@ func TestServerEmbedsMetadataAndShareData(t *testing.T) {
 	body := response.Body.String()
 	for _, want := range []string{
 		`property="og:title" content="Track — Artist"`,
-		`property="og:audio" content="https://music.example.com/share/s/signed-track"`,
+		`property="og:audio" content="https://music.example.com/share/share-id/preview.mp3"`,
 		`property="og:image" content="https://music.example.com/share/img/signed-track?size=600&amp;square=true"`,
 		`id="music-link-share" type="application/json"`,
 		`"id":"share-id"`,
@@ -60,6 +75,58 @@ func TestServerEmbedsMetadataAndShareData(t *testing.T) {
 	}
 }
 
+func TestTelegramReceivesTaggedMP3(t *testing.T) {
+	t.Parallel()
+	directory := t.TempDir()
+	shellPath := filepath.Join(directory, "index.html")
+	if err := os.WriteFile(shellPath, []byte("<html><head></head><body></body></html>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	server, err := NewServer(loader{}, generatedMP3{data: "tagged mp3"}, "https://music.example.com", shellPath, "", "", "")
+	if err != nil {
+		t.Fatalf("NewServer() error = %v", err)
+	}
+
+	redirect := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/share/share-id", nil)
+	request.Header.Set("User-Agent", "TelegramBot (like TwitterBot)")
+	server.ServeHTTP(redirect, request)
+	if redirect.Code != http.StatusTemporaryRedirect || redirect.Header().Get("Location") != "/share/share-id/preview.mp3" {
+		t.Fatalf("Telegram redirect = %d %q", redirect.Code, redirect.Header().Get("Location"))
+	}
+
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, redirect.Header().Get("Location"), nil))
+	if response.Code != http.StatusOK || response.Body.String() != "tagged mp3" {
+		t.Fatalf("MP3 response = %d %q", response.Code, response.Body.String())
+	}
+	if got := response.Header().Get("Content-Type"); got != "audio/mpeg" {
+		t.Errorf("Content-Type = %q", got)
+	}
+	if got := response.Header().Get("Content-Disposition"); got != `inline; filename="Artist - Track.mp3"` {
+		t.Errorf("Content-Disposition = %q", got)
+	}
+}
+
+func TestMP3DownloadRequiresDownloadPermission(t *testing.T) {
+	t.Parallel()
+	directory := t.TempDir()
+	shellPath := filepath.Join(directory, "index.html")
+	if err := os.WriteFile(shellPath, []byte("<html><head></head><body></body></html>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	server, err := NewServer(loader{}, generatedMP3{}, "https://music.example.com", shellPath, "", "", "")
+	if err != nil {
+		t.Fatalf("NewServer() error = %v", err)
+	}
+
+	response := httptest.NewRecorder()
+	server.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/share/share-id/tracks/0.mp3", nil))
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d", response.Code)
+	}
+}
+
 func TestServerServesStaticAssets(t *testing.T) {
 	t.Parallel()
 	directory := t.TempDir()
@@ -73,7 +140,7 @@ func TestServerServesStaticAssets(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "assets", "player.js"), []byte("player"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewServer(loader{}, "https://music.example.com", shellPath, "", "", "")
+	server, err := NewServer(loader{}, generatedMP3{}, "https://music.example.com", shellPath, "", "", "")
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)
 	}
@@ -103,7 +170,7 @@ func TestServerLinksSelectedTheme(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "themes", "manifest.json"), []byte(manifest), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	server, err := NewServer(loader{}, "https://music.example.com", shellPath, "daylight", "", "")
+	server, err := NewServer(loader{}, generatedMP3{}, "https://music.example.com", shellPath, "daylight", "", "")
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)
 	}
@@ -137,7 +204,7 @@ func TestServerRejectsThemeArtifactsOutsideKnownPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := NewServer(loader{}, "https://music.example.com", shellPath, "local", "", ""); err == nil || !strings.Contains(err.Error(), "not an emitted runtime theme") {
+	if _, err := NewServer(loader{}, generatedMP3{}, "https://music.example.com", shellPath, "local", "", ""); err == nil || !strings.Contains(err.Error(), "not an emitted runtime theme") {
 		t.Fatalf("NewServer() error = %v", err)
 	}
 }

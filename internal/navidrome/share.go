@@ -147,6 +147,41 @@ func (c *Client) Load(ctx context.Context, id string) (Share, error) {
 	return share, nil
 }
 
+// DownloadStream copies a public share's signed track stream.
+func (c *Client) DownloadStream(ctx context.Context, trackID string, destination io.Writer) error {
+	return c.download(ctx, StreamPath(trackID), destination)
+}
+
+// DownloadArtwork copies the artwork associated with a signed shared track.
+func (c *Client) DownloadArtwork(ctx context.Context, trackID string, destination io.Writer) error {
+	return c.download(ctx, ArtworkPath(trackID), destination)
+}
+
+func (c *Client) download(ctx context.Context, path string, destination io.Writer) error {
+	assetPath, err := url.Parse(path)
+	if err != nil {
+		return fmt.Errorf("parse Navidrome asset path: %w", err)
+	}
+	assetURL := c.baseURL.JoinPath(strings.TrimPrefix(assetPath.Path, "/"))
+	assetURL.RawQuery = assetPath.RawQuery
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, assetURL.String(), nil)
+	if err != nil {
+		return fmt.Errorf("create Navidrome asset request: %w", err)
+	}
+	response, err := c.httpClient.Do(request)
+	if err != nil {
+		return fmt.Errorf("fetch Navidrome asset: %w", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+		return &ResponseError{StatusCode: response.StatusCode}
+	}
+	if _, err := io.Copy(destination, response.Body); err != nil {
+		return fmt.Errorf("read Navidrome asset: %w", err)
+	}
+	return nil
+}
+
 // ResponseError preserves an upstream public-share status for the browser.
 type ResponseError struct {
 	StatusCode int

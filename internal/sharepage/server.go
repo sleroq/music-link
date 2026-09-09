@@ -9,12 +9,16 @@ import (
 	"fmt"
 	"html"
 	"html/template"
+	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sleroq/music-link/internal/navidrome"
 )
@@ -24,13 +28,20 @@ type Loader interface {
 	Load(context.Context, string) (navidrome.Share, error)
 }
 
+// MP3Generator produces a seekable tagged MP3 for one shared track.
+type MP3Generator interface {
+	Generate(context.Context, navidrome.Track) (io.ReadSeekCloser, error)
+}
+
 // Server renders dynamic metadata while the player itself remains static.
 type Server struct {
-	loader  Loader
-	siteURL string
-	shell   string
-	static  http.Handler
-	theme   string
+	loader   Loader
+	mp3      MP3Generator
+	mp3Slots chan struct{}
+	siteURL  string
+	shell    string
+	static   http.Handler
+	theme    string
 }
 
 type themeColors struct {
@@ -56,7 +67,10 @@ type themeManifestEntry struct {
 }
 
 // NewServer loads the generated static document shell once at startup.
-func NewServer(loader Loader, siteURL, shellPath, theme, lightThemeColor, darkThemeColor string) (*Server, error) {
+func NewServer(loader Loader, mp3 MP3Generator, siteURL, shellPath, theme, lightThemeColor, darkThemeColor string) (*Server, error) {
+	if mp3 == nil {
+		return nil, fmt.Errorf("MP3 generator is required")
+	}
 	siteURL = strings.TrimRight(siteURL, "/")
 	parsedURL, err := url.Parse(siteURL)
 	if err != nil {
@@ -116,11 +130,13 @@ func NewServer(loader Loader, siteURL, shellPath, theme, lightThemeColor, darkTh
 	}
 	static := http.StripPrefix("/_music-link/", http.FileServer(http.Dir(filepath.Dir(shellPath))))
 	return &Server{
-		loader:  loader,
-		siteURL: siteURL,
-		shell:   string(shell),
-		static:  static,
-		theme:   theme,
+		loader:   loader,
+		mp3:      mp3,
+		mp3Slots: make(chan struct{}, 2),
+		siteURL:  siteURL,
+		shell:    string(shell),
+		static:   static,
+		theme:    theme,
 	}, nil
 }
 
@@ -157,7 +173,11 @@ func (server *Server) ServeHTTP(response http.ResponseWriter, request *http.Requ
 		return
 	}
 	response.Header().Set("X-Robots-Tag", "noindex, nofollow")
-	id := navidrome.ShareIDFromPath(request.URL.Path)
+	mp3Request, servesMP3 := parseMP3Request(request.URL.Path)
+	id := mp3Request.shareID
+	if !servesMP3 {
+		id = navidrome.ShareIDFromPath(request.URL.Path)
+	}
 	if id == "" {
 		http.NotFound(response, request)
 		return
@@ -171,8 +191,12 @@ func (server *Server) ServeHTTP(response http.ResponseWriter, request *http.Requ
 		http.NotFound(response, request)
 		return
 	}
+	if servesMP3 {
+		server.serveMP3(response, request, share, mp3Request)
+		return
+	}
 	if len(share.Tracks) == 1 && isCrawler(request.UserAgent()) {
-		http.Redirect(response, request, navidrome.StreamPath(share.Tracks[0].ID), http.StatusTemporaryRedirect)
+		http.Redirect(response, request, "/share/"+url.PathEscape(share.ID)+"/preview.mp3", http.StatusTemporaryRedirect)
 		return
 	}
 	page, err := server.render(share)
@@ -183,6 +207,80 @@ func (server *Server) ServeHTTP(response http.ResponseWriter, request *http.Requ
 	response.Header().Set("Content-Type", "text/html; charset=utf-8")
 	response.Header().Set("Cache-Control", "no-store")
 	_, _ = response.Write(page)
+}
+
+type mp3Request struct {
+	shareID  string
+	track    int
+	download bool
+}
+
+func parseMP3Request(path string) (mp3Request, bool) {
+	remainder, included := strings.CutPrefix(path, "/share/")
+	if !included {
+		return mp3Request{}, false
+	}
+	parts := strings.Split(remainder, "/")
+	if len(parts) == 2 && navidrome.ValidShareID(parts[0]) && parts[1] == "preview.mp3" {
+		return mp3Request{shareID: parts[0]}, true
+	}
+	if len(parts) != 3 || !navidrome.ValidShareID(parts[0]) || parts[1] != "tracks" || !strings.HasSuffix(parts[2], ".mp3") {
+		return mp3Request{}, false
+	}
+	track, err := strconv.Atoi(strings.TrimSuffix(parts[2], ".mp3"))
+	if err != nil || track < 0 {
+		return mp3Request{}, false
+	}
+	return mp3Request{shareID: parts[0], track: track, download: true}, true
+}
+
+func (server *Server) serveMP3(response http.ResponseWriter, request *http.Request, share navidrome.Share, media mp3Request) {
+	if media.track >= len(share.Tracks) || (media.download && (!share.Downloadable || !share.DownloadsEnabled)) {
+		http.NotFound(response, request)
+		return
+	}
+	track := share.Tracks[media.track]
+	select {
+	case server.mp3Slots <- struct{}{}:
+		defer func() { <-server.mp3Slots }()
+	default:
+		response.Header().Set("Retry-After", "10")
+		http.Error(response, "audio conversion is busy", http.StatusServiceUnavailable)
+		return
+	}
+	file, err := server.mp3.Generate(request.Context(), track)
+	if err != nil {
+		http.Error(response, "could not prepare audio", http.StatusBadGateway)
+		return
+	}
+	defer func() { _ = file.Close() }()
+
+	disposition := "inline"
+	if media.download {
+		disposition = "attachment"
+	}
+	response.Header().Set("Content-Type", "audio/mpeg")
+	response.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": mp3Filename(track)}))
+	response.Header().Set("Cache-Control", "private, no-store")
+	http.ServeContent(response, request, mp3Filename(track), time.Time{}, file)
+}
+
+func mp3Filename(track navidrome.Track) string {
+	name := track.Title
+	if track.Artist != "" {
+		name = track.Artist + " - " + name
+	}
+	name = strings.Map(func(character rune) rune {
+		if character < ' ' || character == '/' || character == '\\' {
+			return '_'
+		}
+		return character
+	}, name)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "Track"
+	}
+	return name + ".mp3"
 }
 
 func isCrawler(userAgent string) bool {
@@ -220,6 +318,7 @@ var metadataTemplate = template.Must(template.New("metadata").Parse(`<meta prope
 <meta property="og:image:alt" content="Artwork for {{.Title}}">
 <meta property="og:audio" content="{{.Audio}}">
 <meta property="og:audio:secure_url" content="{{.Audio}}">
+<meta property="og:audio:type" content="audio/mpeg">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{{.Title}}">
 <meta name="twitter:description" content="{{.Description}}">
@@ -281,7 +380,7 @@ func (server *Server) metadata(share navidrome.Share) metadata {
 		Description: description,
 		URL:         shareURL,
 		Image:       server.siteURL + navidrome.ArtworkPath(track.ID),
-		Audio:       server.siteURL + navidrome.StreamPath(track.ID),
+		Audio:       shareURL + "/preview.mp3",
 		Type:        openGraphType(share),
 	}
 }

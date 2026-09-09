@@ -25,5 +25,7 @@ export const publicUrls = {
   artwork: (trackToken: string) =>
     `/share/img/${encodeURIComponent(trackToken)}?size=600&square=true`,
   download: (shareId: string) => `/share/d/${encodeURIComponent(shareId)}`,
+  mp3Download: (shareId: string, trackIndex: number) =>
+    `/share/${encodeURIComponent(shareId)}/tracks/${trackIndex}.mp3`,
   m3u: (shareId: string) => `/share/${encodeURIComponent(shareId)}/m3u`,
 };

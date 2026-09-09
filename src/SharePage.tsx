@@ -350,6 +350,9 @@ export default function SharePage(props: { share: SharedMusic }) {
             <a href={publicUrls.stream(track().id)}>Open audio link</a>
             <a href={publicUrls.m3u(props.share.id)} download>Open M3U</a>
             <Show when={props.share.downloadable && props.share.downloadsEnabled}>
+              <a href={publicUrls.mp3Download(props.share.id, current())} download>
+                Download current MP3
+              </a>
               <a href={publicUrls.download(props.share.id)} download>Download collection</a>
             </Show>
           </div>

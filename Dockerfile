@@ -23,7 +23,11 @@ COPY cmd ./cmd
 COPY internal ./internal
 RUN CGO_ENABLED=0 go build -o /music-link ./cmd/music-link
 
-FROM gcr.io/distroless/base-debian12:nonroot
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=frontend /app/dist/client /app/client
 COPY --from=backend /music-link /music-link
@@ -32,4 +36,5 @@ ENV MUSIC_LINK_ADDR=0.0.0.0:8787
 ENV MUSIC_LINK_SHELL=/app/client/index.html
 
 EXPOSE 8787
+USER 65532:65532
 ENTRYPOINT ["/music-link"]

@@ -1,7 +1,11 @@
 package navidrome
 
 import (
+	"bytes"
+	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -46,5 +50,31 @@ func TestPublicPaths(t *testing.T) {
 	}
 	if got := ArtworkPath("signed token"); got != "/share/img/signed%20token?size=600&square=true" {
 		t.Fatalf("ArtworkPath() = %q", got)
+	}
+}
+
+func TestClientDownloadsAssetsBelowConfiguredBasePath(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if got := request.URL.EscapedPath(); got != "/navidrome/share/img/signed%20token" {
+			t.Errorf("asset path = %q", got)
+		}
+		if got := request.URL.RawQuery; got != "size=600&square=true" {
+			t.Errorf("asset query = %q", got)
+		}
+		_, _ = response.Write([]byte("artwork"))
+	}))
+	defer server.Close()
+
+	client, err := NewClient(server.URL + "/navidrome")
+	if err != nil {
+		t.Fatalf("NewClient() error = %v", err)
+	}
+	var artwork bytes.Buffer
+	if err := client.DownloadArtwork(context.Background(), "signed token", &artwork); err != nil {
+		t.Fatalf("DownloadArtwork() error = %v", err)
+	}
+	if got := artwork.String(); got != "artwork" {
+		t.Fatalf("artwork = %q", got)
 	}
 }
