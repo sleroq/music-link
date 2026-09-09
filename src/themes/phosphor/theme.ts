@@ -9,17 +9,21 @@ let analyser: AnalyserNode | undefined;
 let levels: Uint8Array<ArrayBuffer> | undefined;
 let audio: HTMLAudioElement | undefined;
 let frame = 0;
-const disposed = () => status === 'disposed';
+function disposed() {
+  return status === 'disposed';
+}
 
-const reset = () => root.style.setProperty('--beat-glow', '0%');
+function reset() {
+  root.style.setProperty('--beat-glow', '0%');
+}
 
-const stopVisual = () => {
+function stopVisual() {
   if (frame) cancelAnimationFrame(frame);
   frame = 0;
   reset();
-};
+}
 
-const draw = () => {
+function draw() {
   const state = window.musicLink.state;
   if (!analyser || !levels || !state?.player.playing || reducedMotion.matches) {
     stopVisual();
@@ -32,9 +36,9 @@ const draw = () => {
   const strength = total / bassBins / 255;
   root.style.setProperty('--beat-glow', `${Math.round(strength * 42)}%`);
   frame = requestAnimationFrame(draw);
-};
+}
 
-const initialize = async (element: HTMLAudioElement) => {
+async function initialize(element: HTMLAudioElement) {
   status = 'starting';
   try {
     context = new AudioContext();
@@ -63,9 +67,9 @@ const initialize = async (element: HTMLAudioElement) => {
       });
     }
   }
-};
+}
 
-const update = async () => {
+async function update() {
   if (status === 'disposed' || status === 'failed') return;
   const state = window.musicLink.state;
   if (reducedMotion.matches || !state?.player.playing) {
@@ -82,28 +86,32 @@ const update = async () => {
     }
   }
   if (status === 'ready' && !frame) frame = requestAnimationFrame(draw);
-};
+}
 
-const onPlay = () => void update();
+function onPlay() {
+  void update();
+}
 const onPause = stopVisual;
 
-const bindAudio = (element: HTMLAudioElement | null) => {
+function bindAudio(element: HTMLAudioElement | null) {
   if (!element || element === audio) return;
   audio?.removeEventListener('play', onPlay);
   audio?.removeEventListener('pause', onPause);
   audio = element;
   audio.addEventListener('play', onPlay);
   audio.addEventListener('pause', onPause);
-};
+}
 
 const unsubscribe = window.musicLink.subscribe(({ elements }) => {
   bindAudio(elements.audio);
   void update();
 });
-const onMotionChange = () => void update();
+function onMotionChange() {
+  void update();
+}
 reducedMotion.addEventListener('change', onMotionChange);
 
-const dispose = () => {
+function dispose() {
   if (status === 'disposed') return;
   status = 'disposed';
   stopVisual();
@@ -118,7 +126,7 @@ const dispose = () => {
       console.warn('Phosphor audio analysis could not close its context.', error);
     });
   }
-};
+}
 
 addEventListener('pagehide', (event: PageTransitionEvent) => {
   stopVisual();

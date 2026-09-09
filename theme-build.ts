@@ -3,14 +3,19 @@ export interface ThemeColors {
   dark: string;
 }
 
-export const builtInThemeColors: Record<string, ThemeColors> = {
+export const builtInThemeColors = {
   base: { light: '#171815', dark: '#171815' },
   daylight: { light: '#f7f0df', dark: '#17130f' },
   phosphor: { light: '#000000', dark: '#000000' },
-};
+} satisfies Record<string, ThemeColors>;
 
-const value = (environment: NodeJS.ProcessEnv, name: string) =>
-  environment[name]?.trim() || undefined;
+function value(environment: NodeJS.ProcessEnv, name: string) {
+  return environment[name]?.trim() || undefined;
+}
+
+function findBuiltInThemeColors(theme: string): ThemeColors | undefined {
+  return Object.entries(builtInThemeColors).find(([name]) => name === theme)?.[1];
+}
 const safeThemeName = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 export function resolveThemeBuild(
@@ -36,7 +41,7 @@ export function resolveThemeBuild(
     throw new Error('MUSIC_LINK_DEFAULT_THEME must be included in MUSIC_LINK_THEMES.');
   }
 
-  const builtInColors = builtInThemeColors[defaultTheme];
+  const builtInColors = findBuiltInThemeColors(defaultTheme);
   const light = value(environment, 'MUSIC_LINK_THEME_COLOR') ?? builtInColors?.light;
   if (!light) {
     throw new Error(
@@ -65,6 +70,19 @@ export interface ThemeManifest {
   themes: Record<string, ThemeManifestEntry>;
 }
 
+function createThemeManifestEntry(
+  theme: string,
+  defaultTheme: string,
+  themesWithScripts: ReadonlySet<string>,
+): ThemeManifestEntry {
+  const entry: ThemeManifestEntry = {};
+  if (theme !== defaultTheme) entry.stylesheet = `themes/${theme}/styles.css`;
+  if (themesWithScripts.has(theme)) entry.script = true;
+  const colors = findBuiltInThemeColors(theme);
+  if (colors) entry.colors = colors;
+  return entry;
+}
+
 export function createThemeManifest(
   themes: readonly string[],
   defaultTheme: string,
@@ -72,10 +90,9 @@ export function createThemeManifest(
 ): ThemeManifest {
   return {
     version: 1,
-    themes: Object.fromEntries(themes.map((theme) => [theme, {
-      ...(theme === defaultTheme ? {} : { stylesheet: `themes/${theme}/styles.css` }),
-      ...(themesWithScripts.has(theme) ? { script: true as const } : {}),
-      ...(builtInThemeColors[theme] ? { colors: builtInThemeColors[theme] } : {}),
-    }])),
+    themes: Object.fromEntries(themes.map((theme) => [
+      theme,
+      createThemeManifestEntry(theme, defaultTheme, themesWithScripts),
+    ])),
   };
 }

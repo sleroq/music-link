@@ -66,9 +66,9 @@ if (!import.meta.env.SSR) {
   void loadSelectedTheme();
 }
 
-const notify = () => {
+function notify() {
   for (const listener of listeners) listener(api);
-};
+}
 
 export function publishThemeState(next: MusicLinkThemeState) {
   state = Object.freeze({

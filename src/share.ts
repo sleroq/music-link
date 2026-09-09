@@ -16,8 +16,7 @@ export interface SharedMusic {
 
 export function pageShare(): SharedMusic {
   const payload = document.getElementById('music-link-share')!.textContent!;
-  // SAFETY: Go serializes a SharedMusic value with encoding/json into this
-  // inert script element before the player bundle loads.
+  // SAFETY: Go serializes SharedMusic with encoding/json into this inert element before the bundle loads.
   return JSON.parse(payload) as SharedMusic;
 }
 
