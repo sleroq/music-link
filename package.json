@@ -1,25 +1,32 @@
 {
-  "name": "example-bare",
+  "name": "music-link",
   "version": "0.0.0",
-  "description": "",
+  "description": "A public-share player for Navidrome",
   "type": "module",
   "scripts": {
     "start": "vite",
     "dev": "vite",
     "build": "vite build",
+    "test": "vitest run --environment node",
+    "typecheck": "tsc --noEmit",
     "serve": "vite preview",
     "lint": "oxlint -c oxlint.config.mjs src"
   },
   "license": "MIT",
   "devDependencies": {
     "@solidjs/vite-plugin": "^3.0.0-next.29",
+    "@types/node": "^26.2.0",
     "eslint-plugin-solid": "~0.16.0",
     "oxlint": "~1.79.0",
     "typescript": "^5.9.2",
-    "vite": "^8.1.5"
+    "vite": "^8.1.5",
+    "vitest": "^4.0.0"
   },
   "dependencies": {
     "@solidjs/web": "^2.0.0-rc.0",
     "solid-js": "^2.0.0-rc.0"
+  },
+  "allowScripts": {
+    "fsevents@2.3.3": true
   }
 }

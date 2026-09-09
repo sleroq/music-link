@@ -1,0 +1,37 @@
+:root {
+  --color-scheme: light;
+  --paper-tint: #f0c98a;
+  --surface: color-mix(in srgb, var(--paper-tint) 16%, #fffdf7);
+  --page-background: #f7f0df;
+  --surface-raised: color-mix(in srgb, var(--paper-tint) 32%, #fffdf7);
+  --text: #24302a;
+  --muted: #69726a;
+  --accent: #bb4b2b;
+  --accent-contrast: #fffdf7;
+  --font-display: Rockwell, 'Roboto Slab', Georgia, serif;
+  --font-body: 'Avenir Next', Avenir, ui-sans-serif, sans-serif;
+  --radius: .25rem;
+  --artwork-treatment: saturate(1.12) contrast(.96);
+  --line: color-mix(in srgb, var(--text) 18%, transparent);
+  --surface-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+  --shadow: color-mix(in srgb, #8e7650 26%, transparent);
+  --danger: #aa2414;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-scheme: dark;
+    --paper-tint: #4c3728;
+    --surface: color-mix(in srgb, var(--paper-tint) 22%, #17130f);
+    --page-background: #17130f;
+    --surface-raised: color-mix(in srgb, var(--paper-tint) 38%, #211a14);
+    --text: #fff7e8;
+    --muted: #c8bba6;
+    --accent: #ff8d5c;
+    --accent-contrast: #281007;
+    --line: color-mix(in srgb, var(--text) 17%, transparent);
+    --surface-soft: color-mix(in srgb, var(--accent) 13%, transparent);
+    --shadow: color-mix(in srgb, #000 58%, transparent);
+    --danger: #ff9f90;
+  }
+}

@@ -1,56 +1,190 @@
-## Solid `bare` template
+# music-link
 
-The smallest useful Solid 2.0 app: `solid-js` + `@solidjs/web`, no router, no server dependencies.
+A statically built SolidJS player for public Navidrome shares. Go renders
+share metadata and serves the player assets; Caddy sends Navidrome media routes
+straight to Navidrome.
 
-**Deployment contract:** `vite build` emits a purely static site — deploy `dist/client` to any static host. The client ships only Solid and your component.
+## Build
 
-## How it works
+Requires Node `20.19+` or `22.12+` and Go 1.26+.
 
-There is no `index.html` and no mount file. `@solidjs/vite-plugin`'s turnkey mode (`start: true` in `vite.config.ts`) generates the entries around two conventions:
-
-- **`src/App.tsx`** — the app. A plain default-exported component; everything you build lives under it.
-- **`src/Document.tsx`** — the document shell, the new `index.html`. It renders the full `<html>` and is where head tags go (title, meta, favicon). It is compiled only into the prerendered static shell and adds **zero client-side JS**. Delete it to fall back to the plugin's built-in shell.
-
-`vite build` prerenders the shell into `dist/client/index.html` and emits the client assets alongside it.
-
-## Usage
-
-Those templates dependencies are maintained via [pnpm](https://pnpm.io) via `pnpm up -Lri`.
-
-This is the reason you see a `pnpm-lock.yaml`. That being said, any package manager will work. This file can be safely be removed once you clone a template.
-
-```bash
-$ npm install # or pnpm install or yarn install
+```sh
+npm install
+npm test
+npm run typecheck
+npm run build
+go test ./cmd/... ./internal/...
+go build -o /usr/local/bin/music-link ./cmd/music-link
 ```
 
-### Learn more on the [Solid Website](https://solidjs.com) and come chat with us on our [Discord](https://discord.com/invite/solidjs)
+## Themes
 
-## Available Scripts
+The player has no user-facing theme switcher: its default theme is chosen when the
+frontend is built. `base` preserves the original appearance. `daylight` is a
+paper-like theme that follows the browser's dark-mode preference, and `phosphor`
+is a high-contrast terminal theme. Phosphor's optional theme script uses real
+Web Audio frequency data to pulse its background while music plays. It stays
+static when reduced motion is requested or audio analysis is unavailable.
 
-In the project directory, you can run:
+`MUSIC_LINK_THEMES` is the comma-separated set of source themes to include;
+`MUSIC_LINK_DEFAULT_THEME` must name one of them. The default is bundled into
+the player stylesheet. Its browser chrome color is selected automatically for
+built-in themes; a local default must also set `MUSIC_LINK_THEME_COLOR` (and
+optionally `MUSIC_LINK_THEME_COLOR_DARK`).
 
-### `npm run dev` or `npm start`
+```sh
+MUSIC_LINK_THEMES=base,daylight \
+MUSIC_LINK_DEFAULT_THEME=daylight \
+npm run build
+```
 
-Runs the app in the development mode.<br>
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+Additional selected themes are emitted at
+`dist/client/themes/<name>/styles.css`; an optional `theme.ts` and its
+dependencies are emitted as a lazy application chunk for any selected theme
+that has one. Unselected theme scripts are not built. To use one, build it alongside a
+different default, then set `MUSIC_LINK_THEME=<name>` when starting the Go
+server. The server verifies the theme and its exact artifacts against the build
+manifest, links its CSS, selects its matching application-owned JS chunk, and
+updates browser chrome colors from that same manifest. A local
+extra theme must also set `MUSIC_LINK_THEME_COLOR` (and optionally
+`MUSIC_LINK_THEME_COLOR_DARK`) at server startup. This is host-side deployment
+selection, not a user-facing runtime switcher.
 
-The page will reload if you make edits.<br>
+```sh
+MUSIC_LINK_THEMES=base,phosphor MUSIC_LINK_DEFAULT_THEME=base npm run build
+MUSIC_LINK_THEME=phosphor MUSIC_LINK_SHELL=$PWD/dist/client/index.html \
+  MUSIC_LINK_SITE_URL=https://music.example.com /usr/local/bin/music-link
+```
 
-### `npm run build`
+Add a local theme at `src/themes/<name>/styles.css`, optionally add `theme.ts`,
+and include its name in the build variables. Theme scripts use dependencies
+installed in the application's root `package.json`; themes do not have separate
+package managers. If it is the default,
+set `MUSIC_LINK_THEME_COLOR` to its light browser-chrome color. The small token
+contract and an example of preference-aware colors are documented in
+[`src/themes/README.md`](src/themes/README.md), including the stable browser API
+and semantic DOM hooks. Theme JavaScript is trusted deployment code with the
+same page privileges as the player; only deploy themes you trust.
 
-Builds the static production site to `dist/client`.
+### Nix
 
-### `npm run serve`
+The flake exposes minimal packages containing one built-in theme each. `default`
+is an alias for `base`, preserving the original package behavior:
 
-Serves the production build locally.
+```sh
+nix build .#base
+nix build .#daylight
+nix build .#phosphor
+```
 
-## The `ssr` flip
+Downstream flakes can build any included set through
+`lib.<system>.makePackage`. The selected `defaultTheme` is compiled into the
+main stylesheet; the other themes remain available for host-side selection with
+`MUSIC_LINK_THEME`.
 
-Streaming SSR is one boolean: add `ssr: true` next to `start: true` in `vite.config.ts`. `src/App.tsx` and `src/Document.tsx` carry over unchanged — `<HydrationScript />` is already in place in the Document (in client mode it is stripped from the static shell). The build then emits a request handler to `dist/server` instead of a purely static site.
+The flake exposes packages and its builder for `x86_64-linux`, `aarch64-linux`,
+and `aarch64-darwin`. Its nixpkgs unstable input has removed
+`x86_64-darwin`; Intel macOS consumers must use a nixpkgs release that still
+supports that platform.
 
-## Growing out of `bare`
+For example:
 
-- **A router, file-system routes, per-page titles, and testing** come with the `basic` template — same structure, more floors.
-- **A server** (data loading, mutations, sessions, API routes) is the `fullstack` template.
+```nix
+{
+  inputs.music-link.url = "github:sleroq/music-link";
 
-## This project was created with the [Solid CLI](https://github.com/solidjs-community/solid-cli)
+  outputs = { self, music-link, ... }:
+    let
+      system = "x86_64-linux";
+    in {
+      packages.${system}.default = music-link.lib.${system}.makePackage {
+        src = ./.;
+        themes = [ "base" "local" ];
+        defaultTheme = "local";
+        themeColor = "#f4efe2";
+        themeColorDark = "#181512";
+      };
+    };
+}
+```
+
+The supplied source must be a music-link source tree containing
+`src/themes/<name>/styles.css` and, optionally, `theme.ts`. `themeColor` and
+`themeColorDark` map to `MUSIC_LINK_THEME_COLOR` and
+`MUSIC_LINK_THEME_COLOR_DARK`; only `themeColor` is required for a custom
+default. Override `npmDepsHash` if the source changes `package-lock.json` or its
+dependencies. Git-backed flakes only copy tracked files, so custom theme files
+must be committed or otherwise tracked. The same applies to this repository's
+implementation files: until they are tracked, use the path form of every build
+command during development (for example, `nix build path:.#daylight`) so Nix
+receives the complete current source tree.
+
+For the multi-theme package above, starting the packaged server with
+`MUSIC_LINK_THEME=base` selects the emitted base theme. When selecting a custom
+non-default theme at runtime, also provide its browser colors through
+`MUSIC_LINK_THEME_COLOR` and optionally `MUSIC_LINK_THEME_COLOR_DARK`.
+
+## Deploy
+
+Build the frontend, put it at the path configured by `MUSIC_LINK_SHELL`, and
+run Go alongside Navidrome:
+
+```sh
+npm run build
+mkdir -p /srv/music-link/dist
+cp -r dist/client /srv/music-link/dist/client
+
+MUSIC_LINK_SITE_URL=https://music.example.com \
+MUSIC_LINK_SHELL=/srv/music-link/dist/client/index.html \
+/usr/local/bin/music-link
+```
+
+`MUSIC_LINK_ADDR` defaults to `127.0.0.1:8787` and
+`MUSIC_LINK_NAVIDROME_URL` to `http://127.0.0.1:4533`. Replace
+`music.example.com` in `Caddyfile` and reload Caddy. Caddy proxies
+`/share/s/*`, `/share/img/*`, `/share/d/*`, and `/share/<id>/m3u` directly to
+Navidrome; all other requests go to Go.
+
+### Docker
+
+`compose.yml` runs music-link only; configure Caddy yourself with the included
+`Caddyfile`.
+
+```sh
+MUSIC_LINK_SITE_URL=https://music.example.com \
+MUSIC_LINK_NAVIDROME_URL=http://host.docker.internal:4533 \
+MUSIC_LINK_THEMES=base,phosphor \
+MUSIC_LINK_DEFAULT_THEME=phosphor \
+docker compose up -d --build
+```
+
+Docker receives the build variables above as build arguments. A local theme is
+available to Docker only when it is present in the Docker build context. Set
+`MUSIC_LINK_THEME=phosphor` in the Compose environment to activate an emitted
+non-default theme.
+
+## Development
+
+For a remote Navidrome instance, build and run Go locally, then start the
+development Caddy proxy:
+
+```sh
+npm run build
+MUSIC_LINK_SITE_URL=http://localhost:8080 \
+MUSIC_LINK_NAVIDROME_URL=https://navidrome.example.com \
+MUSIC_LINK_SHELL=$PWD/dist/client/index.html \
+go run ./cmd/music-link
+
+NAVIDROME_HOST=navidrome.example.com docker compose -f compose.dev.yml up
+```
+
+Open `http://localhost:8080/share/<share-id>`.
+
+## Notes
+
+Go adds Open Graph metadata and embeds the share payload for Solid. Single-track
+`TelegramBot.*` crawler requests redirect to that track's direct audio URL.
+
+Navidrome has no supported public-share metadata API. The Go adapter extracts
+its inert injected JSON without executing the page. It is version-pinned: verify
+`internal/navidrome` types and fixtures whenever Navidrome is upgraded.

@@ -1,0 +1,18 @@
+:root {
+  --color-scheme: dark;
+  --surface: #171815;
+  --page-background: radial-gradient(circle at 12% 6%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 28rem), var(--surface);
+  --surface-raised: #22231f;
+  --text: #f2efe6;
+  --muted: #aaa99f;
+  --accent: #d7ff64;
+  --accent-contrast: var(--surface);
+  --font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --font-body: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --radius: 1.5rem;
+  --artwork-treatment: saturate(0.82) contrast(1.06);
+  --line: color-mix(in srgb, var(--text) 13%, transparent);
+  --surface-soft: color-mix(in srgb, var(--surface-raised) 72%, transparent);
+  --shadow: color-mix(in srgb, var(--surface) 75%, transparent);
+  --danger: #ffb0a8;
+}

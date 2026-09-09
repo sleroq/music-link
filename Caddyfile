@@ -1,0 +1,12 @@
+{
+	# Set an email here if this is your main Caddy configuration.
+	# email ops@example.com
+}
+
+music.example.com {
+	encode zstd gzip
+
+	@navidrome path_regexp ^/share/(?:s/.*|img/.*|d/.*|[A-Za-z0-9_-]{1,128}/m3u/?$)
+	reverse_proxy @navidrome 127.0.0.1:4533
+	reverse_proxy 127.0.0.1:8787
+}

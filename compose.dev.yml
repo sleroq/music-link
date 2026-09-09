@@ -1,0 +1,12 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      NAVIDROME_HOST: ${NAVIDROME_HOST:?Set NAVIDROME_HOST to the remote Navidrome host}
+      MUSIC_LINK_UPSTREAM: ${MUSIC_LINK_UPSTREAM:-host.docker.internal:8787}
+    volumes:
+      - ./Caddyfile.dev:/etc/caddy/Caddyfile:ro
+    extra_hosts:
+      - host.docker.internal:host-gateway

@@ -1,0 +1,25 @@
+{
+	auto_https off
+}
+
+(navidrome) {
+	reverse_proxy https://{$NAVIDROME_HOST:navidrome.example.com} {
+		header_up Host {$NAVIDROME_HOST:navidrome.example.com}
+	}
+}
+
+(music-link) {
+	reverse_proxy {$MUSIC_LINK_UPSTREAM:host.docker.internal:8787}
+}
+
+http://localhost:8080 {
+	encode zstd gzip
+
+	@navidrome path_regexp ^/share/(?:s/.*|img/.*|d/.*|[A-Za-z0-9_-]{1,128}/m3u/?$)
+	handle @navidrome {
+		import navidrome
+	}
+	handle {
+		import music-link
+	}
+}

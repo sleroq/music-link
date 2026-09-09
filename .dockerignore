@@ -1,0 +1,5 @@
+/.cache/
+/.git/
+/.agents/
+/dist/
+/node_modules/

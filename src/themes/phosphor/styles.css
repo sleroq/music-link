@@ -1,0 +1,24 @@
+:root {
+  --color-scheme: dark;
+  --phosphor-tint: #003b1b;
+  --beat-glow: 0%;
+  --surface: color-mix(in srgb, var(--phosphor-tint) 22%, #010604);
+  --page-background: radial-gradient(circle at 50% 18%, color-mix(in srgb, var(--accent) var(--beat-glow), transparent), transparent 52rem), #000;
+  --surface-raised: color-mix(in srgb, var(--phosphor-tint) 48%, #02130a);
+  --text: #c7ffc1;
+  --muted: #6fbf7b;
+  --accent: #3cff42;
+  --accent-contrast: #001b08;
+  --font-display: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --font-body: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --radius: 0;
+  --artwork-treatment: saturate(1.35) contrast(1.2) hue-rotate(72deg);
+  --line: color-mix(in srgb, var(--accent) 32%, transparent);
+  --surface-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  --shadow: color-mix(in srgb, var(--accent) 22%, transparent);
+  --danger: #ff6b6b;
+}
+
+[data-music-link="page"][data-playing="true"] [data-music-link="artwork-frame"] {
+  box-shadow: 0 2.5rem 7rem color-mix(in srgb, var(--accent) var(--beat-glow), var(--shadow));
+}
