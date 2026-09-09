@@ -93,7 +93,8 @@
                 cp -r dist/client $out/share/music-link/client
                 go build -o $out/libexec/music-link ./cmd/music-link
                 makeWrapper $out/libexec/music-link $out/bin/music-link \
-                  --set-default MUSIC_LINK_SHELL $out/share/music-link/client/index.html
+                  --set-default MUSIC_LINK_SHELL $out/share/music-link/client/index.html \
+                  --prefix PATH : ${pkgs.lib.makeBinPath [ pkgs.ffmpeg ]}
                 runHook postInstall
               '';
             };

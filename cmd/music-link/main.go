@@ -8,6 +8,7 @@ import (
 
 	"github.com/sleroq/music-link/internal/navidrome"
 	"github.com/sleroq/music-link/internal/sharepage"
+	"github.com/sleroq/music-link/internal/taggedmp3"
 )
 
 func main() {
@@ -40,6 +41,7 @@ func run() error {
 	}
 	server, err := sharepage.NewServer(
 		client,
+		taggedmp3.NewGenerator(client, "ffmpeg"),
 		siteURL,
 		shellPath,
 		os.Getenv("MUSIC_LINK_THEME"),
