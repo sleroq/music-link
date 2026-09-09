@@ -338,7 +338,9 @@ func (server *Server) render(share navidrome.Share) ([]byte, error) {
 	}
 	if server.theme != "" {
 		injected.WriteString(`<link rel="stylesheet" href="/_music-link/`)
-		injected.WriteString("themes/" + server.theme + "/styles.css")
+		injected.WriteString("themes/")
+		injected.WriteString(server.theme)
+		injected.WriteString("/styles.css")
 		injected.WriteString(`">`)
 		injected.WriteString(`<meta name="music-link-theme" content="`)
 		injected.WriteString(server.theme)
