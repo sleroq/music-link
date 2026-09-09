@@ -113,6 +113,14 @@
         {
           inherit base;
           default = base;
+          all = makePackage {
+            themes = [
+              "base"
+              "daylight"
+              "phosphor"
+            ];
+            defaultTheme = "phosphor";
+          };
           daylight = makePackage {
             themes = [ "daylight" ];
             defaultTheme = "daylight";
