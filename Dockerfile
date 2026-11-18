@@ -1,4 +1,4 @@
-FROM node:22-bookworm AS frontend
+FROM node:26-bookworm AS frontend
 
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -15,7 +15,7 @@ ENV MUSIC_LINK_THEME_COLOR=$MUSIC_LINK_THEME_COLOR
 ENV MUSIC_LINK_THEME_COLOR_DARK=$MUSIC_LINK_THEME_COLOR_DARK
 RUN npm run build
 
-FROM golang:1.26-bookworm AS backend
+FROM golang:1.27-bookworm AS backend
 
 WORKDIR /app
 COPY go.mod ./
